@@ -4,6 +4,21 @@ function StimLog = ShowGrating(window, vparams, sparams)
 % ___________________________________________________________________
 
 %-------------- Initiate Paramaters ---------------%
+if isfield(sparams,'paralellport')
+  fprintf(1,"Using the parallel Port.\n")
+  TTLfunction = @(x)parallelTTLoutput(sparams.paralellport,x);
+  startbit = 2^2;
+  stopbit = ;
+  pulsebit = 2^0;
+  stimbit = 2^1 + 2^0;
+elseif isfield(sparams,'serialport')
+  TTLfunction = @(x)serialTTLoutput(sparams.serialport,x);
+  startbit = 0;
+  stopbit = 0;
+  pulsebit = 0;
+else
+  TTLfunction = @(x)0;
+endif % TTLpulse initialization
 
   %----- Screen -----%
   screenid = sparams.screenid;
@@ -28,16 +43,8 @@ function StimLog = ShowGrating(window, vparams, sparams)
     %--- Change Between Sweeps ---%
     angle = vparams.Angle; 
                       
-    %----- Log Stimuli -----%
-    StimLog.StimulusClass = 'Grating';
-    StimLog.Background = Background;
-    StimLog.Contrast = contrast;
-    StimLog.TemporalFreq = vparams.TemporalFreq;
-    StimLog.SpatialFreq = vparams.Size;
-    StimLog.BeginTime = GetSecs;    
-    for j = 1:5; srl_write(sparams.serialport,'0'); end
-    
-    
+
+
 %--------------- Build Texture ---------------%
 phaseincrement = (cyclespersecond * 360) * ifi;       % Compute increment of phase shift per redraw:
 switch vparams.Shape
@@ -48,30 +55,53 @@ switch vparams.Shape
 end
 
 
+%----- Log Stimuli -----%
+StimLog.StimulusClass = 'Grating';
+StimLog.Background = Background;
+StimLog.Contrast = contrast;
+StimLog.TemporalFreq = vparams.TemporalFreq;
+StimLog.SpatialFreq = vparams.Size;
+
 %--------------- Stimulus Loop for NAngles, NSpatialFreq, NTemporalFreq, NContrastLevels, NBackgroundLevels ---------------%
 Screen('FillRect', window, Background)   
-  
+
+% ----- Display Blank screen for BlankTime-----%
+%TIME = GetSecs;
+TTLfunction(startbit);
+StimLog.BlankTime = GetSecs;
+WaitSecs(vparams.BlankTime)
+%WaitSecs(TIME + vparams.BlankTime - GetSecs);
+%TIME = TIME + vparams.BlankTime;
   %---------- Make Stimulus List ----------%    
   for i = 1:size(angle,2)    
-    
     if i == 1
       %---------- Show Initiatial Textture ----------%
-      StimLog.Stim(i).StartSweep = GetSecs - StimLog.BeginTime;
-      for j = 1:5; srl_write(sparams.serialport,'0'); end
       Screen('DrawTexture', win, gratingtex, [], [], angle(i), [], [], [], [], rotateMode, [phase, freq, contrast, 0]);
+      % ----- Log Grating on screen -----%
       vbl = Screen('Flip', win);
-      WaitSecs(vparams.PreTime);  
+      TTLfunction(pulsebit)
+      StimLog.BeginTime = vbl;
+
+      StimLog.BlankTime = StimLog.BeginTime - StimLog.BlankTime; 
+      StimLog.Stim(i).StartSweep = StimLog.BeginTime; 
+
+      WaitSecs(vparams.PreTime);
+%      WaitSecs(TIME + vparams.PreTime - GetSecs);
+%      TIME = TIME + vparams.PreTime;
     else
-      StimLog.Stim(i).StartSweep = GetSecs - StimLog.BeginTime; 
-      for j = 1:5; srl_write(sparams.serialport,'0'); end
       Screen('DrawTexture', win, gratingtex, [], [], angle(i), [], [], [], [], rotateMode, [phase, freq, contrast, 0]);
+      
       vbl = Screen('Flip', win);
-      WaitSecs(vparams.InterStimTime); 
+      TTLfunction(pulsebit)
+      WaitSecs(vparams.InterStimTime);
+      StimLog.Stim(i).StartSweep = vbl - StimLog.BeginTime;
+      %WaitSecs(TIME + vparams.InterStimTime - GetSecs);
+      %TIME = TIME + vparams.InterStimTime;
     end
     StimLog.Angle = angle(i);
     StimLog.Stim(i).BeginSweep = GetSecs - StimLog.BeginTime;    
-    for j = 1:5; srl_write(sparams.serialport,'0'); end
-    
+
+    %TTLfunction(0)    
     %---------- Animation loop: Repeats until NFrames Completed ----------%  	
     count = 0;
     while count < NFrames
@@ -79,8 +109,6 @@ Screen('FillRect', window, Background)
         count = count + 1;
         % Increment phase by 1 degree:
         phase = phase + phaseincrement;
-        StimLog.Stim(i).FrameTimes(count) = GetSecs - StimLog.BeginTime;
-        for j = 1:5; srl_write(sparams.serialport,'0'); end
         % Draw the grating, centered on the screen, with given rotation 'angle',
         % sine grating 'phase' shift and amplitude, rotating via set
         % 'rotateMode'. Note that we pad the last argument with a 4th
@@ -88,14 +116,25 @@ Screen('FillRect', window, Background)
         % vector with a number of components that is an integral multiple of 4,
         % i.e. in our case it must have 4 components:
         Screen('DrawTexture', win, gratingtex, [], [], angle(i), [], [], [], [], rotateMode, [phase, freq, contrast, 0]);
-
-        % Show it at next retrace:
+        
+        
         vbl = Screen('Flip', win, vbl + 0.5 * ifi);
+        
+        if (count == 1) || (count == NFrames)
+          TTLfunction(stimbit);
+        else
+          TTLfunction(pulsebit);
+        endif
+        StimLog.Stim(i).FrameTimes(count) = GetSecs - StimLog.BeginTime;
+        
+        % Show it at next retrace:
     end
   end
-WaitSecs(vparams.PostTime); 
 Screen('FillRect', window, Background)
+WaitSecs(vparams.PostTime);
 vbl = Screen('Flip', win);
-StimLog.EndTime = GetSecs - StimLog.BeginTime; 
-for j = 1:5; srl_write(sparams.serialport,'0'); end
+TTLfunction(stimbit);
+StimLog.EndTime = vbl - StimLog.BeginTime;
+WaitSecs(vparams.BlankTime);
+TTLfunction(stopbit);
 return;

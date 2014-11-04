@@ -5,12 +5,25 @@ oldEnableFlag = Screen('Preference', 'SuppressAllWarnings', 1);
 %% Initializationtion Routines
 
 	%---------- Communications ----------%
+  %TTL_protocol = 'serial';
+ TTL_protocol = 'parallel';
+%TTL_protocol='';
+  
 	[status, Myipaddr] = system('ifconfig');
 	IPAddress = '10.86.1.87';  
 	udpIN = 1214;	
 	udpsock=pnet('udpsocket', udpIN)		 
 	pnet(udpsock,'setreadtimeout',0);
-  %sparams.serialport = serial('/dev/ttyS0');
+  
+  if strcmp(TTL_protocol,'serial')
+      sparams.serialport = serial('/dev/ttyS0');
+  elseif strcmp(TTL_protocol,'parallel')
+      pkg load instrument-control
+      sparams.paralellport = parallel('/dev/parport0',0);
+  else
+      disp('No protocol defined for TTL pulses.');
+  endif
+  
 			
 	%---------- PTB Initialization ----------%	
 	AssertOpenGL; 	% Make sure this is running on OpenGL Psychtoolbox
@@ -83,7 +96,7 @@ while main_loop_run
       
 		case 'Grating'      
       StimLog = ShowGrating(window,vparams,sparams); 
-      save '/media/nerffs01/Data/StimLog/StimLog' StimLog;
+      #save '/media/nerffs01/Data/StimLog/StimLog' StimLog;
       
 		case 'Noise'
     fdisp(stdout,'Picking Noise Stimuli.');       
@@ -99,8 +112,7 @@ while main_loop_run
     case 'Flashing Bar'
       StimLog = ShowFlashingBar(window,vparams,sparams); 
       save '/media/nerffs01/Data/StimLog/StimLog' StimLog;
-      
-      
+            
 		otherwise
 			if ~isempty(VStim)
 				fdisp(stdout,'Stimulus Not Programed Correctly');
@@ -110,6 +122,7 @@ while main_loop_run
   
 		                	
 end
+
 %% Clean up and Close Everything -- Bye Bye
 Screen('CloseAll');
 Screen('Preference','SuppressAllWarnings',oldEnableFlag);

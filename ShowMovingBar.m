@@ -4,7 +4,13 @@ function StimLog = ShowMovingBar(window,vparams,sparams);
 %-------------- Initiate -------------%
 nangles = length(vparams.Angle);
 
-
+if ismember(sparams,'paralellport')
+  TTLfunction = @(x)parallelTTLoutput(sparams.paralellport,x);
+elseif ismember(sparams,'serialport')
+  TTLfunction = @(x)serialTTLoutput(sparams.serialport,x);
+else
+  TTLfunction = @(x)0;
+endif % TTLpulse initialization
 
 
   %----- Make Parameter List -----%
@@ -30,7 +36,9 @@ nangles = length(vparams.Angle);
   %----- Log Stimulus ------%
   StimLog.StimulusClass = 'Moving Bar';
   StimLog.BeginTime = GetSecs;  
-  for j = 1:5; srl_write(sparams.serialport,'0'); end 
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%IMPORTANT%%%%%%%%%%%
+  % Do you want a pulse to be output here?
+  %for j = 1:5; srl_write(sparams.serialport,'0'); end 
   for i = 1:size(StimList,1)
     %StimLog.Stim(i).Stimulus = vparams.Shape; 
     StimLog.Stim(i).Size = StimList(i,1); % Size
